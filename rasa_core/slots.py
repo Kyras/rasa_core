@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
+from typing import Dict, Callable
 
 import logging
 
@@ -12,12 +13,18 @@ logger = logging.getLogger(__name__)
 
 class Slot(object):
     type_name = None
+    __processor = None
 
-    def __init__(self, name, initial_value=None, value_reset_delay=None):
+    def __init__(self, name, initial_value=None, value_reset_delay=None, *args, **kwargs):
         self.name = name
         self.value = initial_value
         self.initial_value = initial_value
         self._value_reset_delay = value_reset_delay
+
+        if self.__processor is not None:
+            data = self.__processor(*args, **kwargs)
+            if isinstance(data, Dict):
+                self.__dict__.update(self.__processor)
 
     def feature_dimensionality(self):
         """How many features this single slot creates.
@@ -65,9 +72,17 @@ class Slot(object):
             return utils.class_from_module_path(type_name)
         except Exception:
             raise ValueError(
-                    "Failed to find slot type. Neither a known type nor. If "
-                    "you are creating your own slot type, make sure its "
-                    "module path is correct: {}.".format(type_name))
+                "Failed to find slot type. Neither a known type nor. If "
+                "you are creating your own slot type, make sure its "
+                "module path is correct: {}.".format(type_name))
+
+    @staticmethod
+    def set_processor(fn):
+        if not isinstance(fn, Callable[..., dict]):
+            raise ValueError("processor should be an function, returning dictionary")
+        if Slot.__processor is not None:
+            raise ValueError("processor re-assignment is forbidden")
+        Slot.__processor = fn
 
     def persistence_info(self):
         return {"type": utils.module_path_from_instance(self),
@@ -81,17 +96,18 @@ class FloatSlot(Slot):
                  initial_value=None,
                  value_reset_delay=None,
                  max_value=1.0,
-                 min_value=0.0):
-        super(FloatSlot, self).__init__(name, initial_value, value_reset_delay)
+                 min_value=0.0,
+                 *args, **kwargs):
+        super(FloatSlot, self).__init__(name, initial_value, value_reset_delay, *args, **kwargs)
         self.max_value = max_value
         self.min_value = min_value
 
         if min_value >= max_value:
             raise ValueError(
-                    "Float slot ('{}') created with an invalid range "
-                    "using min ({}) and max ({}) values. Make sure "
-                    "min is smaller than max."
-                    "".format(self.name, self.min_value, self.max_value))
+                "Float slot ('{}') created with an invalid range "
+                "using min ({}) and max ({}) values. Make sure "
+                "min is smaller than max."
+                "".format(self.name, self.min_value, self.max_value))
 
         if (initial_value is not None and
                 not (min_value <= initial_value <= max_value)):
@@ -170,10 +186,13 @@ class CategoricalSlot(Slot):
     def __init__(self, name,
                  values=None,
                  initial_value=None,
-                 value_reset_delay=None):
+                 value_reset_delay=None,
+                 *args,
+                 **kwargs):
         super(CategoricalSlot, self).__init__(name,
                                               initial_value,
-                                              value_reset_delay)
+                                              value_reset_delay,
+                                              *args, **kwargs)
         self.values = [str(v).lower() for v in values] if values else []
 
     def persistence_info(self):
@@ -192,13 +211,13 @@ class CategoricalSlot(Slot):
             else:
                 if self.value is not None:
                     logger.warn(
-                            "Categorical slot '{}' is set to a value ('{}') "
-                            "that is not specified in the domain. "
-                            "Value will be ignored and the slot will "
-                            "behave as if no value is set. "
-                            "Make sure to add all values a categorical "
-                            "slot should store to the domain."
-                            "".format(self.name, self.value))
+                        "Categorical slot '{}' is set to a value ('{}') "
+                        "that is not specified in the domain. "
+                        "Value will be ignored and the slot will "
+                        "behave as if no value is set. "
+                        "Make sure to add all values a categorical "
+                        "slot should store to the domain."
+                        "".format(self.name, self.value))
         except (TypeError, ValueError):
             logger.exception("Failed to featurize categorical slot.")
             return r
@@ -209,8 +228,8 @@ class CategoricalSlot(Slot):
 
 
 class DataSlot(Slot):
-    def __init__(self, name, initial_value=None, value_reset_delay=1):
-        super(DataSlot, self).__init__(name, initial_value, value_reset_delay)
+    def __init__(self, name, initial_value=None, value_reset_delay=1, *args, **kwargs):
+        super(DataSlot, self).__init__(name, initial_value, value_reset_delay, *args, **kwargs)
 
     def as_feature(self):
         raise NotImplementedError("Each slot type needs to specify how its "
