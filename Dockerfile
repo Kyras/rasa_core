@@ -1,4 +1,4 @@
-FROM python:3.7-slim
+FROM python:3.6-slim
 
 SHELL ["/bin/bash", "-c"]
 
@@ -7,7 +7,6 @@ RUN apt-get update -qq && \
   build-essential \
   wget \
   openssh-client \
-  graphviz-dev \
   pkg-config \
   git-core \
   openssl \
