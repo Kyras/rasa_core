@@ -22,9 +22,9 @@ class Slot(object):
         self._value_reset_delay = value_reset_delay
 
         if self.__processor is not None:
-            data = self.__processor(*args, **kwargs)
-            if isinstance(data, Dict):
-                self.__dict__.update(self.__processor)
+            data = self.__processor(*args, **kwargs)  # type: Dict
+            self._additional = set(data.keys())
+            self.__dict__.update(self.__processor)
 
     def feature_dimensionality(self):
         """How many features this single slot creates.
@@ -81,12 +81,12 @@ class Slot(object):
         if not isinstance(fn, Callable[..., dict]):
             raise ValueError("processor should be an function, returning dictionary")
         if Slot.__processor is not None:
-            raise ValueError("processor re-assignment is forbidden")
+            raise RuntimeWarning("processor re-assignment is forbidden")
         Slot.__processor = fn
 
     def persistence_info(self):
-        return {"type": utils.module_path_from_instance(self),
-                "initial_value": self.initial_value}
+        return {**{"type": utils.module_path_from_instance(self),
+                   "initial_value": self.initial_value}, **{k: getattr(self, k) for k in self._additional}}
 
 
 class FloatSlot(Slot):
